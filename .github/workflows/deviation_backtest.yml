@@ -25,21 +25,18 @@ jobs:
       - name: Execute Backtest
         run: python deviation_backtest.py
 
-      - name: Commit and Push Reports
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and Push Summary Report
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # 确保在推送前同步远程状态
           git pull origin main --rebase
+          # 仅添加汇总报告文件
+          git add data/multi_timeframe_report.md
           
-          git add data/*.md
-          # 只有在有变化时才提交
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "docs: 自动更新回测报告 [skip ci]"
+            git commit -m "docs: 更新全周期汇总报告 [skip ci]"
             git push origin main
           fi
