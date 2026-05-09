@@ -3,15 +3,15 @@ import numpy as np
 import glob
 import os
 
-class DeviationStrategy:
+class DeviationBacktest:
     def __init__(self, data_path='data/'):
         self.data_path = data_path
-        self.targets = [0.012, 0.015, 0.018]  # A, B, C 目标
+        self.targets = {'A': 0.012, 'B': 0.015, 'C': 0.018}
 
     def calculate_indicators(self, df):
         # MA20
         df['ma20'] = df['close'].rolling(window=20).mean()
-        # MACD
+        # MACD (12, 26, 9)
         ema12 = df['close'].ewm(span=12, adjust=False).mean()
         ema26 = df['close'].ewm(span=26, adjust=False).mean()
         df['macd_diff'] = ema12 - ema26
@@ -25,25 +25,28 @@ class DeviationStrategy:
 
     def run(self):
         files = glob.glob(os.path.join(self.data_path, '*.csv'))
-        all_stats = []
+        if not files:
+            print("错误: data/ 目录下未找到 CSV 文件")
+            return
 
+        all_stats = []
         for file in files:
             df = pd.read_csv(file)
             df.columns = df.columns.str.lower()
             df = self.calculate_indicators(df)
-            interval_name = os.path.basename(file)
+            interval = os.path.basename(file)
 
-            # 定义信号
+            # 信号定义
             signals = {
                 'MA多头': (df['close'] > df['ma20']) & (df['close'].shift(1) <= df['ma20'].shift(1)),
                 'MA空头': (df['close'] < df['ma20']) & (df['close'].shift(1) >= df['ma20'].shift(1)),
                 'MACD多头': (df['macd_diff'] > df['macd_dea']) & (df['macd_diff'].shift(1) <= df['macd_dea'].shift(1)),
                 'MACD空头': (df['macd_diff'] < df['macd_dea']) & (df['macd_diff'].shift(1) >= df['macd_dea'].shift(1)),
                 'RSI多头': (df['rsi12'] < 30) & (df['rsi12'].shift(1) >= 30),
-                'RSI空头': (df['rsi12'] > 70) & (df['rsi12'].shift(1) <= 70)
+                'RSI空头': (df['rsi12'] > 70) & (df['rsi12'].shift(1) <= 70) # 已修正逻辑
             }
 
-            # 定义反向退出信号（用于确定偏离值计算区间）
+            # 对应退出信号（用于确定计算区间）
             exits = {
                 'MA多头': signals['MA空头'], 'MA空头': signals['MA多头'],
                 'MACD多头': signals['MACD空头'], 'MACD空头': signals['MACD多头'],
@@ -51,36 +54,37 @@ class DeviationStrategy:
             }
 
             for name, sig_series in signals.items():
-                sig_indices = df.index[sig_series].tolist()
-                total = len(sig_indices)
+                indices = df.index[sig_series].tolist()
+                total = len(indices)
                 if total == 0: continue
 
-                counts = [0, 0, 0] # A, B, C 计数
-                for idx in sig_indices:
+                hits = {k: 0 for k in self.targets.keys()}
+                for idx in indices:
                     if idx + 1 >= len(df): continue
-                    anchor_price = df.at[idx + 1, 'open']
+                    anchor_price = df.at[idx + 1, 'open'] # 下一根开盘锚定
                     
-                    # 寻找下一个退出信号位置
+                    # 确定终点
                     future_exits = df.index[(df.index > idx) & exits[name]]
                     end_idx = future_exits[0] if not future_exits.empty else len(df) - 1
                     
                     window = df.loc[idx+1 : end_idx]
-                    if '多头' in name:
-                        max_dev = (window['high'].max() - anchor_price) / anchor_price
-                    else:
-                        max_dev = (anchor_price - window['low'].min()) / anchor_price
+                    move = (window['high'].max() - anchor_price) / anchor_price if '多头' in name else \
+                           (anchor_price - window['low'].min()) / anchor_price
 
-                    for i, t in enumerate(self.targets):
-                        if max_dev >= t: counts[i] += 1
+                    for k, threshold in self.targets.items():
+                        if move >= threshold: hits[k] += 1
 
                 all_stats.append({
-                    'File': interval_name, 'Indicator': name, 'Total': total,
-                    'A_Rate': f"{counts[0]/total:.2%}", 'B_Rate': f"{counts[1]/total:.2%}", 'C_Rate': f"{counts[2]/total:.2%}"
+                    '文件': interval, '指标': name, '总数': total,
+                    'A率(>1.2%)': f"{hits['A']/total:.2%}",
+                    'B率(>1.5%)': f"{hits['B']/total:.2%}",
+                    'C率(>1.8%)': f"{hits['C']/total:.2%}"
                 })
 
         report = pd.DataFrame(all_stats)
-        report.to_csv('final_report.csv', index=False)
-        print(report.to_markdown()) # 在Action日志中直接打印美化表格
+        report.to_csv('deviation_report.csv', index=False, encoding='utf-8-sig')
+        # 直接输出 Markdown 到 GitHub Action 日志
+        print(report.to_markdown(index=False))
 
 if __name__ == "__main__":
-    DeviationStrategy().run()
+    DeviationBacktest().run()
