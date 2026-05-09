@@ -5,17 +5,17 @@ on:
     paths:
       - 'data/**'
       - 'deviation_backtest.py'
-  workflow_dispatch: # 支持手动触发
+  workflow_dispatch: 
 
 jobs:
   run-analysis:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # 顺便升级到 v4，更稳定
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # 顺便升级到 v5
         with:
           python-version: '3.9'
 
@@ -26,7 +26,7 @@ jobs:
         run: python deviation_backtest.py
 
       - name: Save Report Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4 # 这里是核心修复：v3 改为 v4
         with:
           name: Deviation-Backtest-Result
           path: deviation_report.csv
