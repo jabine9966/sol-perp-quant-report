@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4 # 顺便升级到 v4，更稳定
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v5 # 顺便升级到 v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -25,8 +25,12 @@ jobs:
       - name: Execute Backtest
         run: python deviation_backtest.py
 
-      - name: Save Report Artifact
-        uses: actions/upload-artifact@v4 # 这里是核心修复：v3 改为 v4
-        with:
-          name: Deviation-Backtest-Result
-          path: deviation_report.csv
+      - name: Commit and Push Reports
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # 强制添加 data 文件夹下的所有 md 文件
+          git add data/*.md
+          # 只有在有变动时才提交，防止报错
+          git commit -m "docs: 自动更新回测报告 [skip ci]" || echo "No changes to commit"
+          git push
