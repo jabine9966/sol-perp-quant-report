@@ -10,9 +10,13 @@ on:
 jobs:
   run-analysis:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 显式声明写入权限
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 获取完整历史以确保推送顺利
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -30,13 +34,18 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          git pull origin main --rebase
-          # 仅添加汇总报告文件
+          # 1. 先把生成的文件添加到暂存区
           git add data/multi_timeframe_report.md
           
+          # 2. 检查是否有变化需要提交
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
+            # 3. 提交
             git commit -m "docs: 更新全周期汇总报告 [skip ci]"
+            
+            # 4. 推送，如果远程有更新则先合并
+            # 使用 --rebase 并在 push 前 fetch 确保路径干净
+            git pull --rebase origin main
             git push origin main
           fi
