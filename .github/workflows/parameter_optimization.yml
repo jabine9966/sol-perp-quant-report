@@ -1,0 +1,36 @@
+name: Parameter Optimization Strategy
+
+on:
+  workflow_dispatch: # 手动触发，适合耗时较长的寻优任务
+
+jobs:
+  optimize-all:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy tabulate
+
+      - name: Run Optimization
+        run: python parameter_optimization_strategy.py
+
+      - name: Commit Summary Report
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/parameter_optimization_strategy.md
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "docs: 更新汇总优化报告 [skip ci]"
+            git push origin main
+          fi
